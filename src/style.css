@@ -1,0 +1,43 @@
+* {
+  margin: 0;
+  padding: 0;
+}
+html,
+body {
+  height: 100%;
+}
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+#options {
+  display: flex;
+  justify-content: space-between;
+}
+
+button {
+  width: 30%;
+}
+
+#game {
+  margin-top: 20px;
+  height: 100%;
+  width: 70vmin;
+}
+table {
+  width: 70vmin;
+  height: 70vmin;
+  border-collapse: collapse;
+}
+#game > div {
+  margin-bottom: 10px;
+}
+
+input {
+  width: 100%;
+}
