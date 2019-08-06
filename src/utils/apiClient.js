@@ -1,21 +1,27 @@
-import fetch from 'node-fetch';
+import { createBoard } from './boardUtils';
 
 const API_ROOT = 'https://api.noopschallenge.com';
+const cache = createBoard(100);
 
-function getJson(path) {
-  return fetch(API_ROOT + path, {
-    method: 'get',
-    'Cache-Control': 'no-cache',
-    Pragma: 'no-cache',
-  }).then(res => res.json());
-}
-
-function postJson(path, body) {
-  return fetch(API_ROOT + path, {
+/**
+ *
+ * @param {String} path
+ * @param {Object} body {direction: 'X'} where X = W, N, E or S
+ * @param {Number} x Position in row
+ * @param {Number} y Position in col
+ */
+async function postJson(path, body, x, y) {
+  if (cache[x][y]) {
+    return Promise.resolve(cache[x][y]);
+  }
+  const res = await fetch(API_ROOT + path, {
     method: 'post',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  }).then(res => res.json());
+  });
+  const data = await res.json();
+  cache[x][y] = data;
+  return data;
 }
 
-export { getJson, postJson };
+export default postJson;

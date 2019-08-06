@@ -9,16 +9,11 @@ function KeyboardEventHandler() {
   };
 
   return {
-    setHandler,
     attachHandler,
     removeHandler,
     pause,
     resume,
   };
-
-  function setHandler(callback) {
-    handler = callback;
-  }
 
   function handleEvent(e) {
     if (e.key in keyMap) {
@@ -37,7 +32,8 @@ function KeyboardEventHandler() {
     flag = true;
   }
 
-  function attachHandler() {
+  function attachHandler(callback) {
+    handler = callback;
     window.addEventListener('keydown', handleEvent);
   }
 

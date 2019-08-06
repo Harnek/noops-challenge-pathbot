@@ -2,10 +2,9 @@
 /* eslint-disable react/no-array-index-key */
 /* eslint-disable react/jsx-one-expression-per-line */
 import React, { useEffect, useState, useRef, Fragment } from 'react';
-import { postJson } from '../utils/apiClient';
+import postJson from '../utils/apiClient';
 import {
   initBoard,
-  createBoard,
   updateBoard,
   getNewPosition,
   colorMap,
@@ -16,7 +15,6 @@ import Solver from '../utils/solverUtils';
 
 function Game() {
   const [game, setGame] = useState(initBoard(100));
-  const locationCache = useRef(createBoard(100));
   const location = useRef({
     description: null,
     exits: [],
@@ -36,7 +34,7 @@ function Game() {
   const useSolver = useRef(false);
   const didUserMove = useRef(false);
 
-  const [zoom, setZoom] = useState(15);
+  const zoom = useRef(15);
   const zoomInput = useRef(null);
 
   const inputHandler = useRef(new KeyboardEventHandler());
@@ -47,55 +45,55 @@ function Game() {
     fetchAndUpdate('/pathbot/start', {});
     solver.current.initSolver(100, handleKeyboardEvent);
     inputHandler.current.pause();
-    inputHandler.current.setHandler(handleKeyboardEvent);
-    inputHandler.current.attachHandler();
+    inputHandler.current.attachHandler(handleKeyboardEvent);
 
     return () => {
       inputHandler.current.removeHandler();
     };
   }, []);
 
-  function fetchAndUpdate(url, body) {
+  async function fetchAndUpdate(url, body) {
     isUpdating.current = true;
-    const [newX, newY] = getNewPosition(game.x, game.y, nextDirection.current);
 
-    // if already in location_cache
-    if (locationCache.current[newX][newY] !== null) {
-      location.current = { ...locationCache.current[newX][newY] };
-      const { exits } = location.current;
-      setGame(() => updateBoard(game, nextDirection.current, exits));
-    } else {
-      postJson(url, body).then(res => {
-        if (!isCancelled.current) {
-          location.current = res;
-          locationCache.current[newX][newY] = { ...location.current };
-          if (location.current.status === 'finished') {
-            inputHandler.current.removeHandler();
-            isOver.current = true;
-          } else {
-            const { exits } = location.current;
-            setGame(() => updateBoard(game, nextDirection.current, exits));
-          }
+    const [newX, newY] = getNewPosition(game.x, game.y, nextDirection.current);
+    const data = await postJson(url, body, newX, newY);
+
+    if (!isCancelled.current) {
+      location.current = data;
+
+      if (location.current.status === 'finished') {
+        if (isImmersive.current) {
+          synth.current.speak(location.current.description);
         }
-      });
+        inputHandler.current.removeHandler();
+        isOver.current = true;
+        isUpdating.current = false;
+        setUpdateFlag(prevValue => !prevValue);
+      } else {
+        const { exits } = location.current;
+        setGame(() => updateBoard(game, nextDirection.current, exits));
+      }
     }
   }
 
   function handleKeyboardEvent(direction) {
     if (!useSolver.current) {
+      // messes up dfs solver if user moves
       didUserMove.current = true;
     }
     inputHandler.current.pause();
-    nextDirection.current = direction;
 
     const { exits } = location.current;
-    if (!exits.includes(nextDirection.current)) {
+    const directionNames = { W: 'West', N: 'North', E: 'East', S: 'South' };
+    if (!exits.includes(direction)) {
       if (isImmersive.current) {
-        synth.current.setText('There is a wall in that direction');
-        synth.current.speak();
+        synth.current.speak(
+          `There is a wall in ${directionNames[direction]} direction.`,
+        );
       }
       inputHandler.current.resume();
     } else {
+      nextDirection.current = direction;
       setUpdateFlag(prevValue => !prevValue);
     }
   }
@@ -127,23 +125,18 @@ function Game() {
         solver.current.initSolver(100, handleKeyboardEvent);
         didUserMove.current = false;
       }
-      solver.current.solve(
-        game.x,
-        game.y,
-        location.current.exits,
-        location.current.mazeExitDirection,
-        location.current.mazeExitDistance,
-      );
+      const { x, y } = game;
+      const { exits, mazeExitDirection, mazeExitDistance } = location.current;
+      solver.current.solve(x, y, exits, mazeExitDirection, mazeExitDistance);
       return;
     }
 
     if (isImmersive.current) {
-      synth.current.setText(location.current.description);
-      synth.current.speak();
+      synth.current.speak(location.current.description);
     }
 
     inputHandler.current.resume();
-  }, [game, zoom]);
+  }, [game]);
 
   if (location.current.status === null) {
     return <div>Loading</div>;
@@ -176,13 +169,16 @@ function Game() {
           <table>
             <tbody>
               {game.board
-                .slice(Math.max(0, game.x - zoom), Math.min(game.x + zoom, 100))
+                .slice(
+                  Math.max(0, game.x - zoom.current),
+                  Math.min(game.x + zoom.current, 100),
+                )
                 .map(row => (
                   <tr>
                     {row
                       .slice(
-                        Math.max(0, game.y - zoom),
-                        Math.min(game.y + zoom, 100),
+                        Math.max(0, game.y - zoom.current),
+                        Math.min(game.y + zoom.current, 100),
                       )
                       .map(col => (
                         <td style={{ backgroundColor: colorMap[col] }} />
@@ -193,14 +189,18 @@ function Game() {
           </table>
           <div id="zoom">
             <input
+              className="slider"
               ref={zoomInput}
               type="range"
               min="10"
-              max="30"
-              step="10"
-              value={zoom}
+              max="25"
+              step="5"
+              value={zoom.current}
               onChange={() => {
-                setZoom(() => Number(zoomInput.current.value));
+                zoom.current = Number(zoomInput.current.value);
+                if (!isUpdating.current) {
+                  setUpdateFlag(prevValue => !prevValue);
+                }
               }}
             />
           </div>
@@ -220,7 +220,7 @@ function Game() {
       ) : (
         <Fragment>
           <div>Description : {location.current.description}</div>
-          <div>Exits :{location.current.exits.join(',')}</div>
+          <div>Exits : {location.current.exits.join(',')}</div>
           <div>Maze exit direction : {location.current.mazeExitDirection}</div>
           <div>Maze exit distance : {location.current.mazeExitDistance}</div>
           <div>Hint: Use Array keys to navigate</div>

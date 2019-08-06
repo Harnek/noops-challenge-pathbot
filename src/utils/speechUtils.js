@@ -4,7 +4,6 @@ function SpeechSynthesis() {
   let utter;
 
   return {
-    setText,
     speak,
     pause,
     resume,
@@ -20,7 +19,8 @@ function SpeechSynthesis() {
     utter.volume = 0.7;
   }
 
-  function speak() {
+  function speak(text) {
+    setText(text);
     cancel();
     synth.speak(utter);
     resume();
